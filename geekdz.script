@@ -1,0 +1,410 @@
+/*
+ * GeekDZ Plymouth Theme Script - Enhanced Version
+ * Implements smooth logo transition with neon effects
+ * 
+ * Animation Timeline:
+ * 0.0s - 0.5s: Arch logo fade-in (smooth entrance)
+ * 0.5s - 1.2s: Arch logo visible (hold phase)
+ * 1.2s - 2.5s: Gradual crossfade from Arch to GeekDZ logo (smooth transition)
+ * 2.5s - 4.5s: GeekDZ logo with pulsing neon blue glow effects
+ * 2.8s - 4.2s: Text "GeekDZ — Building the Future" fade in/out
+ */
+
+// ==== INITIALIZATION ====
+
+// Set completely black background to match GeekDZ logo
+Window.SetBackgroundTopColor(0.0, 0.0, 0.0);    // Pure black #000000
+Window.SetBackgroundBottomColor(0.0, 0.0, 0.0);
+
+// Load images with error checking
+arch_logo_image = Image("arch-logo.png");
+geekdz_logo_image = Image("geekdz-logo.png");
+
+// Verify images loaded successfully
+if (arch_logo_image == NULL || geekdz_logo_image == NULL) {
+    // Fallback text if images fail
+    fallback_image = Image.Text("GeekDZ - Booting System...", 1.0, 1.0, 1.0);
+    fallback_sprite = Sprite(fallback_image);
+    fallback_sprite.SetPosition(Window.GetWidth() / 2 - fallback_image.GetWidth() / 2, 
+                               Window.GetHeight() / 2, 1000);
+}
+
+// Animation timing constants (in seconds) - refined for smoother experience
+FADE_IN_DURATION = 0.5;      // Arch logo fade-in
+ARCH_VISIBLE_DURATION = 0.7;  // How long Arch stays visible
+CROSSFADE_DURATION = 1.3;     // Gradual transition duration
+NEON_GLOW_DURATION = 2.0;     // Neon effect duration
+TEXT_DURATION = 1.4;          // Text display duration
+
+// Animation timing checkpoints
+fade_in_end = FADE_IN_DURATION;
+arch_visible_end = fade_in_end + ARCH_VISIBLE_DURATION;
+crossfade_end = arch_visible_end + CROSSFADE_DURATION;
+neon_end = crossfade_end + NEON_GLOW_DURATION;
+
+// Global animation state
+animation_time = 0.0;
+start_time = Plymouth.GetTime();
+frame_count = 0;
+
+// Screen dimensions and centering
+screen_width = Window.GetWidth();
+screen_height = Window.GetHeight();
+center_x = screen_width / 2;
+center_y = screen_height / 2;
+
+// Logo dimensions and positioning
+logo_width = 512;   // Ensure consistent sizing
+logo_height = 512;
+logo_x = center_x - logo_width / 2;
+logo_y = center_y - logo_height / 2;
+
+// ==== SPRITE SETUP ====
+
+// Arch Linux logo sprite
+arch_sprite = Sprite(arch_logo_image);
+arch_sprite.SetPosition(logo_x, logo_y, 100);
+arch_sprite.SetOpacity(0.0);
+
+// GeekDZ logo sprite (positioned exactly where Arch logo was)
+geekdz_sprite = Sprite(geekdz_logo_image);
+geekdz_sprite.SetPosition(logo_x, logo_y, 101);
+geekdz_sprite.SetOpacity(0.0);
+
+// Multiple neon glow layers for realistic effect
+neon_glow_outer = Sprite();
+neon_glow_middle = Sprite();
+neon_glow_inner = Sprite();
+
+// Create scaled versions for glow effect
+glow_outer_scale = 1.15;
+glow_middle_scale = 1.08;
+glow_inner_scale = 1.04;
+
+// Calculate glow positioning
+glow_outer_size = logo_width * glow_outer_scale;
+glow_middle_size = logo_width * glow_middle_scale;
+glow_inner_size = logo_width * glow_inner_scale;
+
+glow_outer_x = center_x - glow_outer_size / 2;
+glow_outer_y = center_y - glow_outer_size / 2;
+glow_middle_x = center_x - glow_middle_size / 2;
+glow_middle_y = center_y - glow_middle_size / 2;
+glow_inner_x = center_x - glow_inner_size / 2;
+glow_inner_y = center_y - glow_inner_size / 2;
+
+// Setup glow sprites with scaled images
+if (geekdz_logo_image != NULL) {
+    glow_outer_image = geekdz_logo_image.Scale(glow_outer_size, glow_outer_size);
+    glow_middle_image = geekdz_logo_image.Scale(glow_middle_size, glow_middle_size);
+    glow_inner_image = geekdz_logo_image.Scale(glow_inner_size, glow_inner_size);
+    
+    neon_glow_outer.SetImage(glow_outer_image);
+    neon_glow_middle.SetImage(glow_middle_image);
+    neon_glow_inner.SetImage(glow_inner_image);
+    
+    // Position glow sprites behind main logo
+    neon_glow_outer.SetPosition(glow_outer_x, glow_outer_y, 95);
+    neon_glow_middle.SetPosition(glow_middle_x, glow_middle_y, 96);
+    neon_glow_inner.SetPosition(glow_inner_x, glow_inner_y, 97);
+    
+    // Initialize all glow as invisible
+    neon_glow_outer.SetOpacity(0.0);
+    neon_glow_middle.SetOpacity(0.0);
+    neon_glow_inner.SetOpacity(0.0);
+}
+
+// Text setup
+text_image = Image.Text("GeekDZ — Building the Future", 0.9, 0.9, 1.0, "Ubuntu 18");
+text_sprite = Sprite(text_image);
+text_x = center_x - text_image.GetWidth() / 2;
+text_y = logo_y + logo_height + 80;
+text_sprite.SetPosition(text_x, text_y, 150);
+text_sprite.SetOpacity(0.0);
+
+// ==== UTILITY FUNCTIONS ====
+
+// Smooth interpolation (ease-in-out cubic)
+fun smooth_step(t) {
+    if (t <= 0.0) return 0.0;
+    if (t >= 1.0) return 1.0;
+    return t * t * (3.0 - 2.0 * t);
+}
+
+// Smoother interpolation (ease-in-out quint)
+fun smoother_step(t) {
+    if (t <= 0.0) return 0.0;
+    if (t >= 1.0) return 1.0;
+    return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
+}
+
+// Sine wave for pulsing neon effects with variable intensity
+fun neon_pulse(t, frequency, intensity) {
+    base_wave = (Math.Sin(t * frequency * 2.0 * 3.14159) + 1.0) / 2.0;
+    return base_wave * intensity;
+}
+
+// Custom crossfade function for smooth logo transition
+fun crossfade_opacity(progress, fade_type) {
+    if (fade_type == "out") {
+        // Arch logo fades out with accelerated curve
+        return (1.0 - progress) * (1.0 - progress);
+    } else {
+        // GeekDZ logo fades in with decelerated curve
+        return progress * progress;
+    }
+}
+
+// ==== MAIN ANIMATION REFRESH FUNCTION ====
+
+fun refresh_callback() {
+    current_time = Plymouth.GetTime();
+    animation_time = current_time - start_time;
+    frame_count++;
+    
+    // Safety check for negative time
+    if (animation_time < 0) animation_time = 0.0;
+    
+    // ==== PHASE 1: Arch Logo Fade-In (0.0s - 0.5s) ====
+    if (animation_time <= fade_in_end) {
+        progress = animation_time / FADE_IN_DURATION;
+        smooth_progress = smoother_step(progress);
+        arch_sprite.SetOpacity(smooth_progress);
+        geekdz_sprite.SetOpacity(0.0);
+        
+        // Ensure glow is off during this phase
+        neon_glow_outer.SetOpacity(0.0);
+        neon_glow_middle.SetOpacity(0.0);
+        neon_glow_inner.SetOpacity(0.0);
+        text_sprite.SetOpacity(0.0);
+    }
+    
+    // ==== PHASE 2: Arch Logo Visible (0.5s - 1.2s) ====
+    else if (animation_time <= arch_visible_end) {
+        arch_sprite.SetOpacity(1.0);
+        geekdz_sprite.SetOpacity(0.0);
+        
+        // Keep everything else invisible
+        neon_glow_outer.SetOpacity(0.0);
+        neon_glow_middle.SetOpacity(0.0);
+        neon_glow_inner.SetOpacity(0.0);
+        text_sprite.SetOpacity(0.0);
+    }
+    
+    // ==== PHASE 3: Gradual Crossfade (1.2s - 2.5s) ====
+    else if (animation_time <= crossfade_end) {
+        crossfade_progress = (animation_time - arch_visible_end) / CROSSFADE_DURATION;
+        
+        // Smooth crossfade between logos
+        arch_opacity = crossfade_opacity(crossfade_progress, "out");
+        geekdz_opacity = crossfade_opacity(crossfade_progress, "in");
+        
+        arch_sprite.SetOpacity(arch_opacity);
+        geekdz_sprite.SetOpacity(geekdz_opacity);
+        
+        // Still no glow during crossfade
+        neon_glow_outer.SetOpacity(0.0);
+        neon_glow_middle.SetOpacity(0.0);
+        neon_glow_inner.SetOpacity(0.0);
+        text_sprite.SetOpacity(0.0);
+    }
+    
+    // ==== PHASE 4: GeekDZ Logo with Neon Effects (2.5s - 4.5s) ====
+    else if (animation_time <= neon_end) {
+        // Ensure only GeekDZ logo is visible
+        arch_sprite.SetOpacity(0.0);
+        geekdz_sprite.SetOpacity(1.0);
+        
+        // Calculate neon animation progress
+        neon_progress = (animation_time - crossfade_end) / NEON_GLOW_DURATION;
+        
+        // Multiple overlapping pulses for complex neon effect
+        pulse1 = neon_pulse(neon_progress, 1.5, 0.4);  // Fast pulse
+        pulse2 = neon_pulse(neon_progress, 0.8, 0.3);  // Medium pulse
+        pulse3 = neon_pulse(neon_progress, 0.5, 0.2);  // Slow pulse
+        
+        // Layer the pulses for realistic neon glow (cyan/blue #00ccff)
+        combined_intensity = pulse1 + pulse2 + pulse3;
+        
+        neon_glow_outer.SetOpacity(combined_intensity * 0.15);  // Outermost, faintest
+        neon_glow_middle.SetOpacity(combined_intensity * 0.25); // Middle layer
+        neon_glow_inner.SetOpacity(combined_intensity * 0.35);  // Inner, brightest
+        
+        // ==== Text Animation (overlapping with neon) ====
+        text_start = 0.3;  // Start text 30% into neon phase
+        text_end = 0.9;    // End text 90% into neon phase
+        
+        if (neon_progress >= text_start && neon_progress <= text_end) {
+            text_progress = (neon_progress - text_start) / (text_end - text_start);
+            
+            if (text_progress <= 0.4) {
+                // Fade in (first 40%)
+                text_opacity = smoother_step(text_progress / 0.4);
+            } else if (text_progress >= 0.6) {
+                // Fade out (last 40%)
+                text_opacity = smoother_step((1.0 - text_progress) / 0.4);
+            } else {
+                // Hold visible (middle 20%)
+                text_opacity = 1.0;
+            }
+            
+            text_sprite.SetOpacity(text_opacity);
+        } else {
+            text_sprite.SetOpacity(0.0);
+        }
+    }
+    
+    // ==== PHASE 5: Final State (4.5s+) ====
+    else {
+        // Clean final state: only GeekDZ logo visible
+        arch_sprite.SetOpacity(0.0);
+        geekdz_sprite.SetOpacity(1.0);
+        
+        // Gradual fade of glow for smooth ending
+        fade_out_duration = 1.0;  // 1 second fade out
+        time_since_neon_end = animation_time - neon_end;
+        
+        if (time_since_neon_end < fade_out_duration) {
+            fade_progress = time_since_neon_end / fade_out_duration;
+            remaining_glow = 1.0 - smooth_step(fade_progress);
+            
+            neon_glow_outer.SetOpacity(remaining_glow * 0.05);
+            neon_glow_middle.SetOpacity(remaining_glow * 0.08);
+            neon_glow_inner.SetOpacity(remaining_glow * 0.12);
+        } else {
+            // Completely off
+            neon_glow_outer.SetOpacity(0.0);
+            neon_glow_middle.SetOpacity(0.0);
+            neon_glow_inner.SetOpacity(0.0);
+        }
+        
+        text_sprite.SetOpacity(0.0);
+    }
+}
+
+// ==== EVENT HANDLERS ====
+
+global.status = "normal";
+global.password_sprite = NULL;
+
+// Handle normal display state
+fun display_normal_callback() {
+    global.status = "normal";
+    
+    // Hide password display if visible
+    if (global.password_sprite) {
+        global.password_sprite.SetOpacity(0.0);
+    }
+    
+    refresh_callback();
+}
+
+// Handle password prompts with improved display
+fun display_password_callback(prompt, bullets) {
+    global.status = "password";
+    refresh_callback();
+    
+    // Create password display below logo
+    if (bullets > 0) {
+        password_text = "";
+        for (i = 0; i < bullets; i++) {
+            password_text += "●";  // Filled circle bullet
+        }
+        
+        // Create password prompt with styling
+        full_text = prompt + " " + password_text;
+        password_image = Image.Text(full_text, 0.9, 0.9, 1.0, "Ubuntu 14");
+        
+        if (global.password_sprite) {
+            global.password_sprite.SetOpacity(0.0);
+        }
+        
+        global.password_sprite = Sprite(password_image);
+        pass_x = center_x - password_image.GetWidth() / 2;
+        pass_y = text_y + 40;  // Below the main text
+        global.password_sprite.SetPosition(pass_x, pass_y, 200);
+        global.password_sprite.SetOpacity(0.8);
+    } else {
+        // No bullets, hide password display
+        if (global.password_sprite) {
+            global.password_sprite.SetOpacity(0.0);
+        }
+    }
+}
+
+// Handle question prompts
+fun display_question_callback(prompt, entry) {
+    global.status = "question";
+    refresh_callback();
+    
+    // Display question prompt
+    question_image = Image.Text(prompt + " " + entry, 0.9, 0.9, 1.0);
+    if (global.question_sprite) {
+        global.question_sprite.SetOpacity(0.0);
+    }
+    global.question_sprite = Sprite(question_image);
+    global.question_sprite.SetPosition(center_x - question_image.GetWidth() / 2, 
+                                      text_y + 40, 200);
+    global.question_sprite.SetOpacity(0.8);
+}
+
+// Handle status messages
+message_sprites = [];
+message_count = 0;
+
+fun display_message_callback(message) {
+    refresh_callback();
+    
+    // Display message at top of screen
+    msg_image = Image.Text(message, 1.0, 1.0, 1.0, "Ubuntu 12");
+    message_sprites[message_count] = Sprite(msg_image);
+    message_sprites[message_count].SetPosition(10, 10 + (message_count * 25), 300);
+    message_sprites[message_count].text = message;
+    message_count++;
+}
+
+fun hide_message_callback(message) {
+    // Hide specific message
+    for (i = 0; i < message_count; i++) {
+        if (message_sprites[i] && message_sprites[i].text == message) {
+            message_sprites[i].SetOpacity(0.0);
+            message_sprites[i] = NULL;
+        }
+    }
+}
+
+// Handle quit/shutdown
+fun quit_callback() {
+    // Ensure logo is visible during shutdown
+    if (geekdz_sprite) {
+        geekdz_sprite.SetOpacity(1.0);
+    }
+    if (arch_sprite) {
+        arch_sprite.SetOpacity(0.0);
+    }
+    
+    // Turn off glow effects
+    if (neon_glow_outer) neon_glow_outer.SetOpacity(0.0);
+    if (neon_glow_middle) neon_glow_middle.SetOpacity(0.0);
+    if (neon_glow_inner) neon_glow_inner.SetOpacity(0.0);
+    
+    if (text_sprite) {
+        text_sprite.SetOpacity(0.0);
+    }
+}
+
+// ==== REGISTER CALLBACKS ====
+
+Plymouth.SetRefreshFunction(refresh_callback);
+Plymouth.SetDisplayNormalFunction(display_normal_callback);
+Plymouth.SetDisplayPasswordFunction(display_password_callback);
+Plymouth.SetDisplayQuestionFunction(display_question_callback);
+Plymouth.SetDisplayMessageFunction(display_message_callback);
+Plymouth.SetHideMessageFunction(hide_message_callback);
+Plymouth.SetQuitFunction(quit_callback);
+
+// ==== INITIALIZATION COMPLETE ====
+
+// Start the animation
+refresh_callback();
+

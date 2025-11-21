@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=GeekDZ
+Description=GeekDZ Plymouth theme with Arch Linux logo morphing and neon effects
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/geekdz
+ScriptFile=/usr/share/plymouth/themes/geekdz/geekdz.script
